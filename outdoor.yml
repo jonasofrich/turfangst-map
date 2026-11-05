@@ -1,0 +1,350 @@
+# Turfangst's outdoor map: tile schema for Planetiler 0.10.2 (generate-custom).
+#
+# build_map.sh runs this twice, zoom 0 to 6 and zoom 7 to 14, and gives every
+# source its real path on the command line, so the paths below are placeholders.
+#
+# The style's source name must change whenever this schema changes. See "Changing
+# the schema" in README.md.
+schema_name: Turfangst outdoor
+schema_description: Norway and Sweden from OpenStreetMap, elevation curves from Kartverket and Lantmäteriet, a plain world from Natural Earth below zoom 7
+attribution: >-
+  <a href="https://www.openstreetmap.org/copyright">&copy; OpenStreetMap contributors</a>
+  (<a href="https://opendatacommons.org/licenses/odbl/">ODbL</a>),
+  <a href="https://www.kartverket.no">&copy; Kartverket</a>,
+  <a href="https://www.lantmateriet.se">&copy; Lantmäteriet</a>
+sources:
+  ocean:
+    type: shapefile
+    local_path: water-polygons-split-3857.zip
+  osm:
+    type: osm
+    local_path: norway-sweden.osm.pbf
+  natural_earth:
+    type: geopackage
+    local_path: natural_earth_low.gpkg
+  contours:
+    type: geopackage
+    local_path: contours.gpkg
+definitions:
+  name: &name
+    key: name
+  # OSM writes ele as text: 1469, 1469.4, 1469,4, and now and then 4820 ft or a
+  # word. The app's renderer can't round, so the tile holds a whole number of
+  # metres, or nothing when the tag isn't a plain number of metres.
+  ele: &ele
+    key: ele
+    include_when: '${ has(feature.tags.ele) && feature.tags.ele.matches("^-?[0-9]+([.,][0-9]+)?( ?m)?$") }'
+    value: '${ int(double(feature.tags.ele.replaceRegex(" ?m$", "").replace(",", ".")) + (feature.tags.ele.startsWith("-") ? -0.5 : 0.5)) }'
+layers:
+- id: ocean
+  features:
+  - source: ocean
+    geometry: polygon
+- id: water
+  features:
+  - source: osm
+    geometry: polygon
+    min_zoom: 6
+    min_size: 2
+    include_when:
+      natural: [water]
+      waterway: [riverbank, dock]
+      landuse: [reservoir, basin]
+  # The world's lakes below zoom 7. At zoom 6 they overlap OSM's inside the coverage, in the same colour.
+  - source: natural_earth
+    geometry: polygon
+    min_zoom: 2
+    max_zoom: 6
+    min_size: 2
+    include_when: '${ feature.source_layer == "ne_10m_lakes" }'
+- id: water_label
+  features:
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: 11
+    include_when:
+      natural: [water]
+      landuse: [reservoir]
+    exclude_when:
+      name: ''
+    attributes:
+    - *name
+    - key: area
+      value: "${ feature.area('m2') }"
+- id: waterway
+  features:
+  - source: osm
+    geometry: line
+    min_zoom:
+      default_value: 12
+      overrides:
+        8:
+          waterway: [river]
+    include_when:
+      waterway: [river, stream, canal]
+    attributes:
+    - key: class
+      tag_value: waterway
+- id: landcover
+  # Zoom 7 was the heaviest step in the whole file, at 1,062 polygons in Oslo's tile.
+  # Woods and ice are what shows that far out, and neighbours merge.
+  tile_post_process:
+    merge_polygons:
+      min_area: 4
+  features:
+  - source: osm
+    geometry: polygon
+    min_zoom:
+      default_value: 9
+      overrides:
+        7:
+          natural: [wood, glacier]
+          landuse: [forest]
+    min_size: 4
+    include_when:
+      natural: [wood, glacier, wetland, scrub, heath, grassland, bare_rock, scree, sand, beach]
+      landuse: [forest, farmland, meadow, grass, orchard, allotments]
+    attributes:
+    - key: class
+      type: match_value
+  # Ice is the only land cover the world map draws.
+  - source: natural_earth
+    geometry: polygon
+    max_zoom: 6
+    min_size: 2
+    include_when: '${ feature.source_layer == "ne_10m_glaciated_areas" || feature.source_layer == "ne_10m_antarctic_ice_shelves_polys" }'
+    attributes:
+    - key: class
+      value: glacier
+- id: landuse
+  features:
+  - source: osm
+    geometry: polygon
+    min_zoom: 9
+    min_size: 2
+    include_when:
+      landuse: [residential, industrial, commercial, retail, cemetery, railway, military]
+      leisure: [park, pitch, golf_course, garden, playground]
+      amenity: [school, university, hospital, college]
+    attributes:
+    - key: class
+      type: match_value
+- id: protected
+  features:
+  - source: osm
+    geometry: polygon
+    min_zoom: 7
+    min_size: 8
+    include_when:
+      boundary: [national_park, protected_area]
+      leisure: [nature_reserve]
+    attributes:
+    - key: class
+      type: match_value
+    - *name
+- id: road
+  # A road is many short OSM ways. Keep them all and join them, or a motorway breaks into
+  # pieces at low zoom, as the E6 along Mjøsa did at zoom 7.
+  tile_post_process:
+    merge_line_strings:
+      min_length: 0
+      tolerance: 0.1
+      buffer: 8
+  features:
+  - source: osm
+    geometry: line
+    min_size: 0
+    min_zoom:
+      default_value: 12
+      overrides:
+        5:
+          highway: [motorway, trunk]
+        7:
+          highway: [primary]
+        8:
+          highway: [motorway_link, trunk_link, secondary]
+        9:
+          highway: [primary_link, tertiary]
+        11:
+          highway: [secondary_link, tertiary_link]
+    include_when:
+      highway: [motorway, motorway_link, trunk, trunk_link, primary, primary_link, secondary, secondary_link, tertiary, tertiary_link, unclassified, residential, living_street, service, pedestrian]
+    attributes:
+    - key: class
+      tag_value: highway
+    - key: name
+      min_zoom: 12
+    - key: ref
+      min_zoom: 8
+    # No tunnels below where the style draws them, so a road runs on through them.
+    - key: tunnel
+      min_zoom: 9
+    - key: bridge
+      min_zoom: 9
+- id: path
+  features:
+  - source: osm
+    geometry: line
+    min_zoom:
+      default_value: 11
+      overrides:
+        13:
+          highway: [footway, steps, cycleway, corridor]
+    include_when:
+      highway: [path, footway, track, cycleway, bridleway, steps]
+    attributes:
+    - key: class
+      tag_value: highway
+    - key: name
+      min_zoom: 13
+    - key: sac_scale
+    - key: trail_visibility
+    - key: tracktype
+    - key: bicycle
+- id: rail
+  tile_post_process:
+    merge_line_strings:
+      min_length: 0
+      tolerance: 0.1
+      buffer: 8
+  features:
+  - source: osm
+    geometry: line
+    min_size: 0
+    min_zoom: 8
+    include_when:
+      railway: [rail, light_rail, subway, tram, narrow_gauge]
+    attributes:
+    - key: class
+      tag_value: railway
+    - key: tunnel
+      min_zoom: 11
+    - key: service
+    - key: usage
+    - key: track_ref
+      tag_value: railway:track_ref
+- id: ferry
+  features:
+  - source: osm
+    geometry: line
+    min_zoom: 8
+    include_when:
+      route: [ferry]
+    attributes:
+    - *name
+- id: aerialway
+  features:
+  - source: osm
+    geometry: line
+    min_zoom: 11
+    include_when:
+      aerialway: __any__
+    attributes:
+    - *name
+- id: building
+  features:
+  - source: osm
+    geometry: polygon
+    min_zoom: 13
+    min_size: 1
+    include_when:
+      building: __any__
+- id: boundary
+  features:
+  # From zoom 7 OSM draws the borders, leaving out the maritime ones.
+  - source: osm
+    geometry: line
+    min_zoom: 7
+    include_when:
+      admin_level: ['2']
+    exclude_when:
+      maritime: 'yes'
+    attributes:
+    - key: admin_level
+  # Below that, one border for the whole world, so Norway's isn't drawn twice.
+  - source: natural_earth
+    geometry: line
+    max_zoom: 6
+    include_when: '${ feature.source_layer == "ne_10m_admin_0_boundary_lines_land" }'
+    attributes:
+    - key: admin_level
+      value: '2'
+- id: place
+  features:
+  - source: osm
+    geometry: point
+    min_zoom:
+      default_value: 13
+      overrides:
+        1:
+          place: [ocean]
+        3:
+          place: [country, sea]
+        # One tile over Germany held 576 city names at zoom 4 and one over China 1,851, which
+        # no renderer needs. Capitals and cities of a million first, 100,000 next, the rest last.
+        # OSM's population is text, so the digit count stands in for the size.
+        4: '${ feature.tags.place == "city" && ((has(feature.tags.capital) && (feature.tags.capital == "yes" || feature.tags.capital == "2")) || (has(feature.tags.population) && feature.tags.population.matches("^[0-9]{7,}$"))) }'
+        5: '${ feature.tags.place == "city" && has(feature.tags.population) && feature.tags.population.matches("^[0-9]{6,}$") }'
+        6:
+          place: [city]
+        7:
+          place: [town]
+        10:
+          place: [village, suburb]
+        12:
+          place: [hamlet, quarter]
+    include_when:
+      place: [ocean, sea, country, city, town, village, suburb, hamlet, quarter, neighbourhood, locality, isolated_dwelling]
+    exclude_when:
+      name: ''
+    attributes:
+    - key: class
+      tag_value: place
+    # Local names in Norway and Sweden. Elsewhere name:nb, name:no, name:en, then local, so a
+    # zoomed-out map isn't full of scripts people can't read. build_map.sh marks labels
+    # from outside the extracts, and non-Latin names catch the extracts' border strips.
+    # A few names list several languages with semicolons, and the first one is kept.
+    - key: name
+      value: '${ (has(feature.tags.turfangst_outside) || feature.tags.name.matches("[\u0370-\uFFFF]") ? ("name:nb" in feature.tags ? feature.tags["name:nb"] : ("name:no" in feature.tags ? feature.tags["name:no"] : ("name:en" in feature.tags ? feature.tags["name:en"] : feature.tags.name))) : feature.tags.name).replaceRegex(";.*$", "") }'
+    - key: population
+      include_when: '${ has(feature.tags.population) && feature.tags.population.matches("^[0-9]+$") }'
+      value: '${ int(feature.tags.population) }'
+    - key: capital
+- id: peak
+  features:
+  - source: osm
+    geometry: point
+    min_zoom: 10
+    include_when:
+      natural: [peak, volcano]
+    exclude_when:
+      name: ''
+    attributes:
+    - *name
+    - *ele
+- id: outdoor
+  features:
+  - source: osm
+    geometry: point
+    min_zoom: 11
+    include_when:
+      tourism: [alpine_hut, wilderness_hut, viewpoint, camp_site]
+      amenity: [shelter, parking]
+      natural: [saddle, cave_entrance, spring]
+      waterway: [waterfall]
+    attributes:
+    - key: class
+      type: match_value
+    - *name
+    - *ele
+    - key: operator
+- id: contour
+  features:
+  - source: contours
+    geometry: line
+    min_zoom: '${ feature.tags.minzoom }'
+    attributes:
+    - key: ele
+      type: integer
+    - key: index
+      type: integer
