@@ -31,6 +31,7 @@ REQUIRED_LAYERS = (
     "protected",
     "road",
     "path",
+    "ski",
     "rail",
     "ferry",
     "aerialway",
@@ -57,6 +58,8 @@ SAMPLES = (
     Sample("Jotunheimen", 11, 61.6364, 8.3125, ("contour", "peak", "path", "water", "landcover", "outdoor")),
     Sample("Reine", 13, 67.9327, 13.0892, ("ocean", "contour", "road", "place", "building", "peak")),
     Sample("Storlien", 12, 63.3166, 12.1027, ("contour", "boundary", "road", "rail", "water", "waterway")),
+    Sample("Nordmarka", 12, 60.03, 10.66, ("ski",)),
+    Sample("Sälen", 12, 61.16, 13.27, ("ski",)),
     Sample("Åre", 11, 63.4, 13.08, ("aerialway", "water_label", "contour", "peak")),
     # Both sides of the seam between the two Planetiler runs. Natural Earth draws the border
     # at zoom 6 and OSM at zoom 7, and only zoom 6 has it from the first run.

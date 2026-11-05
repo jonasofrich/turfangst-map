@@ -38,7 +38,7 @@ The result is `~/map-build/out/outdoor-YYYYMMDD.mbtiles`, dated by the OSM extra
 
 ## Layers
 
-`ocean, water, water_label, waterway, landcover, landuse, protected, road, path, rail, ferry, aerialway, building, boundary, place, peak, outdoor, contour`
+`ocean, water, water_label, waterway, landcover, landuse, protected, road, path, ski, rail, ferry, aerialway, building, boundary, place, peak, outdoor, contour`
 
 ## Tests
 

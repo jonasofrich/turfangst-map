@@ -186,6 +186,9 @@ merge_extracts() {
   OSM_LOW="$WORK/norway-sweden-labels.osm.pbf"
   say "merging extracts"
   osmium merge --overwrite -o "$OSM_HIGH" "$SOURCES/norway-latest.osm.pbf" "$SOURCES/sweden-latest.osm.pbf"
+  # Planetiler reads tags on ways only, and many ski ways carry theirs on a route relation.
+  python3 "$HERE/tag_ski_routes.py" "$OSM_HIGH" "$WORK/norway-sweden-ski.osm.pbf" || die "tagging ski ways"
+  mv "$WORK/norway-sweden-ski.osm.pbf" "$OSM_HIGH"
   # The frozen labels are older than the extracts. Osmium keeps both versions of an
   # object it finds twice, so what the extracts already hold leaves the label file first.
   # getid exits 1 when an id isn't found, as most aren't, and also on a data error. A bad

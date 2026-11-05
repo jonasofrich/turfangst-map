@@ -3,8 +3,8 @@
 # build_map.sh runs this twice, zoom 0 to 6 and zoom 7 to 14, and gives every
 # source its real path on the command line, so the paths below are placeholders.
 #
-# The style's source name must change whenever this schema changes. See "Changing
-# the schema" in README.md.
+# The tile address in the style must change whenever this schema changes. See
+# "Changing the schema" in README.md.
 schema_name: Turfangst outdoor
 schema_description: Norway and Sweden from OpenStreetMap, elevation curves from Kartverket and Lantmäteriet, a plain world from Natural Earth below zoom 7
 attribution: >-
@@ -201,6 +201,17 @@ layers:
     - key: trail_visibility
     - key: tracktype
     - key: bicycle
+- id: ski
+  features:
+  - source: osm
+    geometry: line
+    min_zoom: 10
+    include_when: '${ "piste:type" in feature.tags && feature.tags["piste:type"].matches("(^|;) *nordic *(;|$)") }'
+    exclude_when:
+      piste:grooming: backcountry
+    attributes:
+    - key: name
+      min_zoom: 13
 - id: rail
   tile_post_process:
     merge_line_strings:
@@ -281,18 +292,20 @@ layers:
         3:
           place: [country, sea]
         # One tile over Germany held 576 city names at zoom 4 and one over China 1,851, which
-        # no renderer needs. Capitals and cities of a million first, 100,000 next, the rest last.
+        # no renderer needs. In Norway and Sweden every city shows at zoom 4; elsewhere only
+        # capitals and cities of a million, then 100,000 at zoom 5, the rest at zoom 6.
         # OSM's population is text, so the digit count stands in for the size.
-        4: '${ feature.tags.place == "city" && ((has(feature.tags.capital) && (feature.tags.capital == "yes" || feature.tags.capital == "2")) || (has(feature.tags.population) && feature.tags.population.matches("^[0-9]{7,}$"))) }'
+        4: '${ feature.tags.place == "city" && (!has(feature.tags.turfangst_outside) || (has(feature.tags.capital) && (feature.tags.capital == "yes" || feature.tags.capital == "2")) || (has(feature.tags.population) && feature.tags.population.matches("^[0-9]{7,}$"))) }'
         5: '${ feature.tags.place == "city" && has(feature.tags.population) && feature.tags.population.matches("^[0-9]{6,}$") }'
-        6:
-          place: [city]
+        6: '${ feature.tags.place == "city" || (feature.tags.place == "town" && !has(feature.tags.turfangst_outside)) }'
         7:
           place: [town]
+        8:
+          place: [village]
         10:
-          place: [village, suburb]
+          place: [suburb, hamlet]
         12:
-          place: [hamlet, quarter]
+          place: [quarter]
     include_when:
       place: [ocean, sea, country, city, town, village, suburb, hamlet, quarter, neighbourhood, locality, isolated_dwelling]
     exclude_when:

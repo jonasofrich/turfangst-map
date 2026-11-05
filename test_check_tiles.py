@@ -262,6 +262,11 @@ class Samples(unittest.TestCase):
         covered = {layer for s in ct.SAMPLES for layer in s.layers}
         self.assertEqual(set(ct.REQUIRED_LAYERS) - covered, set())
 
+    def test_ski_is_expected_and_sampled_in_both_countries(self):
+        self.assertIn("ski", ct.REQUIRED_LAYERS)
+        samples = [s.name for s in ct.SAMPLES if "ski" in s.layers]
+        self.assertEqual(samples, ["Nordmarka", "Sälen"])
+
     def test_samples_read_both_sides_of_the_seam(self):
         self.assertTrue({6, 7} <= {s.z for s in ct.SAMPLES})
 
